@@ -1,5 +1,0 @@
-PASS 256x192; 32x24 CELLs; 7/15 colours; 768 CELLs valid; SCR round trip exact
-ENCODED chaosbunny-stealth-loading.scr: 6912 bytes
-DECODED chaosbunny-stealth-loading-decoded.png: 256x192
-PIXEL COMPARISON native vs decoded: EXACT
-REVISION v2: cap removed; left and right ears have separate skull roots

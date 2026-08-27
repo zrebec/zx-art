@@ -1,3 +1,8 @@
+> **Status: implemented.** This began as a request to extend the `zx-spectrum-screen`
+> skill and is now shipped — sprite mode is in the skill and `tools/zx_sprite.py`
+> exists. It is kept as the specification the implementation answers to. See
+> `README.md` §1 and §5.3 for how it works today.
+
 ADD TO THE zx-spectrum-screen SKILL — a new "Sprite mode" (keep the 256×192 SCR
 "screen mode" exactly as-is).
 
