@@ -1,0 +1,4 @@
+PASS 256x192; 32x24 CELLs; 6/15 colours; 768 CELLs valid; SCR round trip exact
+ENCODED minefield-loading-v2.scr: 6912 bytes
+DECODED minefield-loading-v2-decoded.png: 256x192
+PIXEL COMPARISON native vs decoded: EXACT

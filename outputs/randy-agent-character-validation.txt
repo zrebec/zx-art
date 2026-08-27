@@ -1,0 +1,6 @@
+PASS 32x32 transparent sprite; 8 ZX colours; exact 32 rows x 32 columns
+SOURCE randy-agent-character-32x32-rows.txt
+JSON randy-agent-character.json
+NATIVE randy-agent-character.png: 32x32 RGBA
+PREVIEW randy-agent-character_4x.png: 128x128 nearest-neighbour
+REVISION v2: separate black eyebrows; no black lateral eye frames; enlarged green irises
