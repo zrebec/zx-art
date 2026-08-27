@@ -98,7 +98,7 @@ collision mask. Multi-colour = one bitmap per colour, overlaid in its ink.
 
 1. the native **256×192** image using only palette colours;
 2. a **4× nearest-neighbour preview (1024×768)**;
-3. *(the 6912-byte `.scr` is produced on our side by `zxart/tools/zx_screen.py` from your native
+3. *(the 6912-byte `.scr` is produced on our side by `zx-art/tools/zx_screen.py` from your native
    image — you do not need to emit it.)*
 
 ## Rules (hard)
