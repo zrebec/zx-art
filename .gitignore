@@ -1,0 +1,11 @@
+# Renders. Every file here is a function of something in art/ — rebuild with
+# `python3 tools/zx_art.py build`. Committing them is what produced two rival
+# output directories in the first place.
+build/
+
+# The default landing spot of tools/zx_sprite.py when it is run without --out.
+outputs/
+
+__pycache__/
+*.pyc
+.DS_Store
