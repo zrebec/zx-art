@@ -7,7 +7,11 @@ rather than a note someone forgot to update.
 `Check` means, for a screen, that decoding the `.scr` and encoding the result
 returns the identical 6912 bytes — so the file on disk is the whole picture and
 a PNG beside it would say nothing more. For a sprite it means the grid is
-rectangular and uses only `.` and its own legend symbols. A note about unused
+rectangular and uses only `.` and its own legend symbols. For a tileset it means
+every tile is a square grid of its declared size with no `.` (tiles are opaque),
+and every `8x8` cell of every tile holds at most one INK and one PAPER from one
+brightness bank — the same test a screen cell passes, so a room laid out from
+these tiles on their own grid is a displayable screen. A note about unused
 legend symbols is not a failure: a pose family shares one legend, and a pose may
 not reach for every colour in it.
 
@@ -23,8 +27,19 @@ not reach for every colour in it.
 
 | Asset | Size | Bytes | Colours | Detail | Check |
 |---|---|---:|---:|---|---|
+| `art/chaosbunny/sprites/fox-td-down.json` | 16x24 | 720 | 4 | R=C.B_RED W=C.B_WHITE X=C.BLACK Y=C.B_YELLOW | PASS |
+| `art/chaosbunny/sprites/fox-td-side.json` | 16x24 | 720 | 4 | R=C.B_RED W=C.B_WHITE X=C.BLACK Y=C.B_YELLOW | PASS |
+| `art/chaosbunny/sprites/fox-td-up.json` | 16x24 | 720 | 4 | R=C.B_RED W=C.B_WHITE X=C.BLACK Y=C.B_YELLOW | PASS · legend symbols unused in this pose: Y |
 | `art/chaosbunny/sprites/randy-agent-character.json` | 32x32 | 1511 | 8 | B=C.B_CYAN C=C.CYAN G=C.B_GREEN N=C.B_BLUE P=C.B_MAGENTA W=C.B_WHITE X=C.BLACK Y=C.B_YELLOW | PASS |
 | `art/chaosbunny/sprites/randy-stealth-character.json` | 24x24 | 957 | 6 | B=C.B_CYAN G=C.B_GREEN N=C.B_BLUE P=C.B_MAGENTA W=C.B_WHITE X=C.BLACK | PASS |
+| `art/chaosbunny/sprites/randy-td-ears-down.json` | 16x24 | 744 | 5 | B=C.B_CYAN G=C.B_GREEN P=C.B_MAGENTA W=C.B_WHITE X=C.BLACK | PASS |
+| `art/chaosbunny/sprites/randy-td-ears-up.json` | 16x24 | 744 | 5 | B=C.B_CYAN G=C.B_GREEN P=C.B_MAGENTA W=C.B_WHITE X=C.BLACK | PASS |
+
+### Tilesets
+
+| Asset | Size | Bytes | Colours | Detail | Check |
+|---|---|---:|---:|---|---|
+| `art/chaosbunny/tiles/room-kit.json` | 16x16 | 2807 | 6 | 6 tiles: floor floor-shadow wall-top wall-face crate door | PASS |
 
 ## icehaul
 
@@ -72,4 +87,4 @@ not reach for every colour in it.
 
 ---
 
-16 assets, 16 passing, 0 failing.
+22 assets, 22 passing, 0 failing.

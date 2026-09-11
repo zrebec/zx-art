@@ -2,14 +2,16 @@
 """Verify, render and inventory the ``art/`` tree.
 
 ``art/`` holds one file per artwork and nothing else. A screen is its ``.scr``;
-a sprite is its ``.json`` text grid. Every PNG this project has ever shipped is a
-*function* of one of those two files, so PNGs are built into ``build/`` on demand
+a sprite is its ``.json`` text grid; a tileset is one ``.json`` holding a family
+of opaque text-grid tiles. Every PNG this project has ever shipped is a
+*function* of one of those files, so PNGs are built into ``build/`` on demand
 and never committed.
 
 This driver is the thing that makes that claim checkable:
 
 ``verify``    every ``.scr`` is a fixed point of decode/encode, every sprite grid
-              matches its legend. Exits non-zero on the first failure.
+              matches its legend, every tile is opaque and every ``8x8`` cell of
+              it is one a screen could hold. Exits non-zero on any failure.
 ``build``     renders ``build/<project>/<mode>/`` from ``art/``.
 ``manifest``  writes ``MANIFEST.md`` from measurements, not from memory.
 """
@@ -21,6 +23,8 @@ import json
 import sys
 from pathlib import Path
 from typing import Iterator, NamedTuple
+
+from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -40,10 +44,10 @@ class Asset(NamedTuple):
     """One row of the inventory: a source file plus everything measured from it."""
 
     project: str
-    mode: str  # "screen" | "sprite"
+    mode: str  # "screen" | "sprite" | "tileset"
     name: str
     source: Path  # relative to the repo root
-    size: str  # "256x192" or "40x64"
+    size: str  # "256x192", "40x64", or a tileset's tile size "16x16"
     bytes_on_disk: int
     colours: int
     detail: str  # mode-specific: cell/flash counts, or the legend
@@ -54,7 +58,11 @@ class Asset(NamedTuple):
 def _iter_sources(root: Path) -> Iterator[tuple[str, str, Path]]:
     """Yields ``(project, mode, path)`` for every source file, in a stable order."""
     for project_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-        for mode, pattern in (("screen", "screens/*.scr"), ("sprite", "sprites/*.json")):
+        for mode, pattern in (
+            ("screen", "screens/*.scr"),
+            ("sprite", "sprites/*.json"),
+            ("tileset", "tiles/*.json"),
+        ):
             for path in sorted(project_dir.glob(pattern)):
                 yield project_dir.name, mode, path
 
@@ -165,14 +173,111 @@ def check_sprite(path: Path) -> tuple[Asset, object]:
     )
 
 
+#: Tiles per row on a tileset contact sheet, and the transparent gap between them.
+SHEET_COLUMNS = 8
+SHEET_GAP = 1
+
+
+def _contact_sheet(tiles: list[Image.Image], size: int) -> Image.Image:
+    """Lays tiles out left to right in authored order, a transparent pixel apart.
+
+    The gap is transparent rather than a colour so the sheet can never be mistaken
+    for a picture made of these tiles: nothing in it is a pixel the art put there.
+    """
+    columns = min(SHEET_COLUMNS, len(tiles))
+    rows = -(-len(tiles) // columns)
+    step = size + SHEET_GAP
+    sheet = Image.new("RGBA", (columns * step - SHEET_GAP, rows * step - SHEET_GAP), zx_sprite.TRANSPARENT)
+    for index, tile in enumerate(tiles):
+        sheet.paste(tile.convert("RGBA"), ((index % columns) * step, (index // columns) * step))
+    return sheet
+
+
+def check_tile(rows: list[str], size: int, legend: dict[str, str]) -> Image.Image:
+    """Validates one tile and returns its render, or raises ``ValueError``.
+
+    Two sprite freedoms are withdrawn. A tile is background, so it has no
+    transparency — the floor has to be *something*. And every ``8x8`` cell must
+    pass the very test a ``.scr`` cell passes (``zx_screen.infer_cell``): at most
+    one INK and one PAPER, from one brightness bank. Tiles whose size is a multiple
+    of 8, laid on a grid of that size, put every cell of the result inside exactly
+    one tile — so any room built from them is a picture the machine could display.
+    """
+    zx_sprite.validate(rows, size, size, legend)
+    for y, row in enumerate(rows, start=1):
+        x = row.find(".")
+        if x >= 0:
+            raise ValueError(f"row {y}, column {x + 1}: '.' is transparent, and a tile is opaque")
+    image = zx_sprite.render(rows, size, size, legend).convert("RGB")
+    cells = size // zx_screen.CELL
+    for cell_y in range(cells):
+        for cell_x in range(cells):
+            zx_screen.infer_cell(image, cell_x, cell_y)
+    return image
+
+
+def check_tileset(path: Path) -> tuple[Asset, object]:
+    """Validates a tileset — ``{tile, legend, tiles: {name: rows}}`` — and renders its sheet."""
+    project = path.parent.parent.name
+    raw = path.read_bytes()
+    status = "PASS"
+    note = ""
+    image = None
+    size = 0
+    legend: dict[str, str] = {}
+    tiles: dict[str, list[str]] = {}
+
+    try:
+        data = json.loads(raw)
+        size = int(data["tile"])
+        legend, tiles = dict(data["legend"]), dict(data["tiles"])
+        if size < zx_screen.CELL or size % zx_screen.CELL:
+            raise ValueError(f"tile size {size} must be a positive multiple of {zx_screen.CELL}")
+        if not tiles:
+            raise ValueError("a tileset needs at least one tile")
+        renders = []
+        for name, rows in tiles.items():
+            if not zx_sprite.NAME_RE.fullmatch(name):
+                raise ValueError(f"tile name {name!r} must be letters, digits, '.', '_' or '-'")
+            try:
+                renders.append(check_tile(list(rows), size, legend))
+            except ValueError as error:
+                raise ValueError(f"tile {name!r}: {error}") from error
+        image = _contact_sheet(renders, size)
+        # Same reasoning as for a sprite family: not a failure, but a symbol no tile
+        # uses is a typo waiting to be copied into the next one.
+        used = {c for rows in tiles.values() for row in rows for c in row}
+        unused = sorted(set(legend) - used)
+        if unused:
+            note = f"legend symbols unused by any tile: {' '.join(unused)}"
+    except (KeyError, ValueError, TypeError) as error:
+        status = f"FAIL: {error}"
+
+    return (
+        Asset(
+            project=project,
+            mode="tileset",
+            name=path.stem,
+            source=path.relative_to(REPO),
+            size=f"{size}x{size}",
+            bytes_on_disk=len(raw),
+            colours=len(set(legend.values())),
+            detail=f"{len(tiles)} tiles: {' '.join(tiles)}",
+            status=status,
+            note=note,
+        ),
+        image,
+    )
+
+
+CHECKS = {"screen": check_screen, "sprite": check_sprite, "tileset": check_tileset}
+
+
 def inventory() -> list[tuple[Asset, object]]:
     """Checks every source under ``art/`` and returns the rows plus the renders."""
     if not ART.is_dir():
         raise SystemExit(f"ERROR: {ART} does not exist")
-    results = []
-    for _project, mode, path in _iter_sources(ART):
-        results.append(check_screen(path) if mode == "screen" else check_sprite(path))
-    return results
+    return [CHECKS[mode](path) for _project, mode, path in _iter_sources(ART)]
 
 
 def command_verify(_args: argparse.Namespace) -> int:
@@ -186,9 +291,11 @@ def command_verify(_args: argparse.Namespace) -> int:
         if asset.status != "PASS":
             print(f"     {asset.status}")
             failures += 1
-    screens = sum(1 for a, _ in results if a.mode == "screen")
-    sprites = len(results) - screens
-    print(f"\n{screens} screens, {sprites} sprites, {failures} failed")
+    count = {mode: sum(1 for a, _ in results if a.mode == mode) for mode in CHECKS}
+    print(
+        f"\n{count['screen']} screens, {count['sprite']} sprites, "
+        f"{count['tileset']} tilesets, {failures} failed"
+    )
     return 1 if failures else 0
 
 
@@ -225,7 +332,11 @@ def _manifest_text(results: list[tuple[Asset, object]]) -> str:
         "`Check` means, for a screen, that decoding the `.scr` and encoding the result",
         "returns the identical 6912 bytes — so the file on disk is the whole picture and",
         "a PNG beside it would say nothing more. For a sprite it means the grid is",
-        "rectangular and uses only `.` and its own legend symbols. A note about unused",
+        "rectangular and uses only `.` and its own legend symbols. For a tileset it means",
+        "every tile is a square grid of its declared size with no `.` (tiles are opaque),",
+        "and every `8x8` cell of every tile holds at most one INK and one PAPER from one",
+        "brightness bank — the same test a screen cell passes, so a room laid out from",
+        "these tiles on their own grid is a displayable screen. A note about unused",
         "legend symbols is not a failure: a pose family shares one legend, and a pose may",
         "not reach for every colour in it.",
         "",
@@ -237,7 +348,7 @@ def _manifest_text(results: list[tuple[Asset, object]]) -> str:
     for project in sorted(projects):
         assets = projects[project]
         lines += [f"## {project}", ""]
-        for mode, heading in (("screen", "Screens"), ("sprite", "Sprites")):
+        for mode, heading in (("screen", "Screens"), ("sprite", "Sprites"), ("tileset", "Tilesets")):
             rows = [a for a in assets if a.mode == mode]
             if not rows:
                 continue
