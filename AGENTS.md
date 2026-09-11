@@ -122,6 +122,17 @@ GIF is a preview/export format, not the canonical screen representation. The
 native `256x192` indexed/static phases and, when applicable, the attribute data
 remain authoritative.
 
+### 3.5 Tiles are fragments of a screen
+
+A tile (`art/<project>/tiles/*.json`, see `README.md` §1) is not a full screen,
+but every rule in §3.3 applies to each of its `8x8` CELLs: one INK, one PAPER,
+one brightness state. A tile's size must be a multiple of `8` and a tile is
+fully opaque — `.` (transparent) is not allowed. The validator checks each CELL
+with the same function the screen encoder uses, so any room laid out from valid
+tiles on their own grid is a displayable standard screen.
+
+Author tiles as text grids, like sprites. Do not derive them by downscaling.
+
 ---
 
 ## 4. Project colour palette

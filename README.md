@@ -16,24 +16,30 @@ constraints, so the game does not have to enforce them at runtime.
 ## 1. The one distinction everything follows from
 
 A **screen** and a **sprite** are different objects, and almost every mistake this project has
-made came from applying one's rules to the other.
+made came from applying one's rules to the other. A **tileset** sits between them: authored like
+a sprite, obeying a screen's cell rule.
 
-|  | Screen mode | Sprite mode |
-|---|---|---|
-| What it is | A whole 48K display, exactly as the machine stored it | A small object composited over a scene in software |
-| Size | Always `256×192` | Whatever you choose — `16×24`, `32×32`, `40×64` |
-| File | `.scr`, exactly `6912` bytes | `.json`, a text grid plus a legend |
-| Two colours per `8×8` cell | **Enforced.** It is a property of the format | **Not applicable.** A sprite has no attribute block |
-| Global colour cap | 15 | None |
-| Transparency | Impossible | Required (`.` in the grid) |
-| Attribute clash | Preserved deliberately — it is the look | Does not exist |
-| Authoring | Convert a concept image, then hand-repair cells | Write the grid by hand |
+|  | Screen mode | Sprite mode | Tileset mode |
+|---|---|---|---|
+| What it is | A whole 48K display, exactly as the machine stored it | A small object composited over a scene in software | Square background pieces a game lays on a grid to build a room |
+| Size | Always `256×192` | Whatever you choose — `16×24`, `32×32`, `40×64` | One size per set, a multiple of 8 — `8×8`, `16×16` |
+| File | `.scr`, exactly `6912` bytes | `.json`, a text grid plus a legend | `.json`, one shared legend plus named grids |
+| Two colours per `8×8` cell | **Enforced.** It is a property of the format | **Not applicable.** A sprite has no attribute block | **Enforced**, cell by cell, by the screen's own test |
+| Global colour cap | 15 | None | None per set; 15 is the palette anyway |
+| Transparency | Impossible | Required (`.` in the grid) | **Forbidden** — background is opaque |
+| Attribute clash | Preserved deliberately — it is the look | Does not exist | Cannot occur *inside* a tile; sprites drawn over tiles are the game's business |
+| Authoring | Convert a concept image, then hand-repair cells | Write the grid by hand | Write the grid by hand |
 
 The last row is the practical one. A concept image downscaled to `256×192` and quantised is a
 usable *starting point* for a screen, because a screen has 49 152 pixels and a mistake in one cell
 is a cell. The same procedure at `16×24` produces 384 pixels of noise. **Small sprites are
 authored as text, not converted.** Image generation may provide a reference for the pose; it never
 provides the final grid.
+
+Why a tileset enforces the cell rule a sprite is free of: a tile whose size is a multiple of 8,
+laid on a grid of that size, puts every `8×8` cell of the room inside exactly one tile. If every
+cell of every tile is legal, **every room built from the set is a picture the machine could
+display** — checked once, per tile, instead of per room.
 
 ---
 
@@ -117,14 +123,15 @@ pipeline sees ordinary rows.
 
 - A screen *is* its `.scr`.
 - A sprite *is* its `.json` — `{w, h, rows, legend}`.
+- A tileset *is* its `.json` — `{tile, legend, tiles: {name: rows}}`.
 
-Both are complete. The proof is not an argument, it is a check that runs:
+All three are complete. The proof is not an argument, it is a check that runs:
 
 ```console
 $ python3 tools/zx_art.py verify
 ok   art/icehaul/screens/icehaul-loading.scr — 256x192, 9 colours
 ...
-6 screens, 10 sprites, 0 failed
+6 screens, 15 sprites, 1 tilesets, 0 failed
 ```
 
 For a screen, `verify` decodes the `.scr` to an image and encodes that image again, and requires
@@ -142,7 +149,7 @@ still exact.
 
 | Kind | Committed | Why |
 |---|---|---|
-| `art/*/screens/*.scr`, `art/*/sprites/*.json` | **yes** | The artwork. Nothing else can reproduce them |
+| `art/*/screens/*.scr`, `art/*/sprites/*.json`, `art/*/tiles/*.json` | **yes** | The artwork. Nothing else can reproduce them |
 | `art/*/concept/*.png` | **yes** | The generated image a screen was composed from. It is an *input*, not a render — re-running a generator produces a different picture, so this is the only irreproducible provenance we have |
 | `build/**` | **no** | Every pixel is a function of the two rows above. `.gitignore`d |
 
@@ -159,6 +166,7 @@ zx-art/
 │   ├── icehaul/
 │   │   ├── screens/            *.scr        — 6912 bytes each
 │   │   ├── sprites/            *.json       — {w, h, rows, legend}
+│   │   ├── tiles/              *.json       — {tile, legend, tiles}   (chaosbunny today)
 │   │   └── concept/            *.png        — generated composition reference
 │   ├── minefield/
 │   ├── chaosbunny/
@@ -249,9 +257,12 @@ python3 tools/zx_art.py build       # render art/ → build/  (add --gif for FLA
 python3 tools/zx_art.py manifest    # write MANIFEST.md
 ```
 
-`verify` is the gate. It walks `art/`, applies §3's fixed-point check to every screen and the grid
-rules to every sprite, and reports notes that are not failures — for example a pose that does not
-use every symbol in its family's shared legend.
+`verify` is the gate. It walks `art/`, applies §3's fixed-point check to every screen, the grid
+rules to every sprite, and to every tile the grid rules plus two more — no `.`, and each `8×8`
+cell passes `zx_screen.infer_cell`, the exact function the screen encoder uses. It reports notes
+that are not failures — for example a pose that does not use every symbol in its family's shared
+legend. A failing tile is named with its cell: `tile 'floor': CELL (0,0) mixes normal and BRIGHT
+colours`.
 
 `manifest` writes `MANIFEST.md` from those measurements, so the inventory cannot be stale in a way
 the tool cannot see. Every column — size, byte count, colour count, bright and flash cell counts,
@@ -261,7 +272,7 @@ rest.
 
 ---
 
-## 6. The two workflows
+## 6. The three workflows
 
 ### Screen
 
@@ -300,6 +311,23 @@ game                   as a bitmap, or as generated TypeScript
 
 `rows.txt` is not committed: it is `json["rows"]`, and keeping two copies of a grid is how they
 come to disagree.
+
+### Tileset
+
+```text
+the room's needs       which surfaces must a player tell apart at a glance?
+   │  write each tile by hand, two colours per 8×8 cell, one bank per cell
+   ▼
+name.json              {tile, legend, tiles}  →  art/<project>/tiles/
+   │  zx_art.py verify           grid + opacity + the screen's cell test
+   │  zx_art.py build            a contact sheet, tiles one transparent pixel apart
+   ▼
+game                   lays the tiles on its own grid
+```
+
+A tileset has no `zx_sprite.py` step: one file holds the whole family, so there is no per-tile
+`rows.txt` to convert. Keep a set's legend small — one bank per cell is easy to break by accident
+when a set grows, and `verify` names the tile and the cell when it happens.
 
 ---
 
