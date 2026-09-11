@@ -1,0 +1,36 @@
+{
+  "w": 16,
+  "h": 24,
+  "rows": [
+    ".........X......",
+    "........XRX.....",
+    "........XRRX....",
+    ".......XRWRRX...",
+    ".......XRRRRRX..",
+    "......XRRRRYXRX.",
+    "......XRRRRRRRRX",
+    "......XRRRRWWWXX",
+    ".......XRRWWWWX.",
+    "........XWWWXX..",
+    "........XWWX....",
+    "......XXRRRX....",
+    ".....XRRRRRRX...",
+    "....XRRRRRRRRX..",
+    "...XRRRRRRRRRX..",
+    "..XRRRRRRRRRRX..",
+    ".XRRRRRRRRRRRX..",
+    "XRRXRRRRRRRRRX..",
+    "XRXXRRRRRRRRRX..",
+    "XRX.XRRRRRRRX...",
+    "XWX.XRRXXXRRX...",
+    "XWX.XRX...XRX...",
+    ".X..XXX...XXX...",
+    "................"
+  ],
+  "legend": {
+    "X": "C.BLACK",
+    "R": "C.B_RED",
+    "W": "C.B_WHITE",
+    "Y": "C.B_YELLOW"
+  }
+}
